@@ -1,0 +1,37 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Provider {
+  GOOGLE
+  YANDEX
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String?
+  provider  Provider?
+  tokens    Token[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Token {
+  token     String   @unique
+  exp       DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  userAgent String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tokens")
+}
