@@ -12,10 +12,16 @@ enum Provider {
   YANDEX
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
   id        String    @id @default(uuid())
   email     String    @unique
   password  String?
+  roles     Role[]
   provider  Provider?
   tokens    Token[]
   createdAt DateTime  @default(now())
