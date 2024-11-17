@@ -17,6 +17,11 @@ enum Role {
   ADMIN
 }
 
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
 model User {
   id        String    @id @default(uuid())
   email     String    @unique
@@ -26,6 +31,12 @@ model User {
   tokens    Token[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  transactions Transaction[]
+  categories   Category[]
+  accounts     Account[]
+  budgets      Budget[]
+  goals        Goal[]
 
   @@map("users")
 }
@@ -40,4 +51,67 @@ model Token {
   updatedAt DateTime @updatedAt
 
   @@map("tokens")
+}
+
+model Transaction {
+  id                      Int             @id @default(autoincrement())
+  amount                  Float
+  type                    TransactionType
+  description             String
+  balanceAfterTransaction Float
+  createdAt               DateTime        @default(now())
+  userId                  String
+  user                    User            @relation(fields: [userId], references: [id])
+  categoryId              Int
+  category                Category        @relation(fields: [categoryId], references: [id])
+  accountId               Int
+  account                 Account         @relation(fields: [accountId], references: [id])
+
+  @@map("transactions")
+}
+
+model Category {
+  id           Int           @id @default(autoincrement())
+  name         String
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+  Budget       Budget[]
+
+  @@map("categories")
+}
+
+model Account {
+  id           Int           @id @default(autoincrement())
+  name         String
+  balance      Float
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+
+  @@map("accounts")
+}
+
+model Budget {
+  id         Int      @id @default(autoincrement())
+  amount     Float
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("budgets")
+}
+
+model Goal {
+  id            Int    @id @default(autoincrement())
+  name          String
+  targetAmount  Float
+  currentAmount Float
+  userId        String
+  user          User   @relation(fields: [userId], references: [id])
+
+  @@map("goals")
 }

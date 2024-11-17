@@ -13,67 +13,75 @@ export class UserService {
     private readonly prismaService: PrismaService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
-  async findMany() {
-    return await this.prismaService.user.findMany();
+  async findMany(): Promise<User[]> {
+    return this.prismaService.user.findMany();
   }
 
-  async save(user: Partial<User>) {
-    const hashedPassword = user?.password
-      ? this.hashPassword(user.password)
-      : null;
-    const savedUser = await this.prismaService.user.upsert({
-      where: {
-        email: user.email,
-      },
-      update: {
-        password: hashedPassword ?? undefined,
-        provider: user?.provider ?? undefined,
-        roles: user?.roles ?? undefined,
-        // isBlocked: user?.isBlocked ?? undefined,
-      },
-      create: {
-        email: user.email,
-        password: hashedPassword,
-        provider: user?.provider,
-        roles: ['USER'],
-      },
-    });
-    await this.cacheManager.set(savedUser.id, savedUser);
-    await this.cacheManager.set(savedUser.email, savedUser);
-    return savedUser;
-  }
-
-  async findOne(idOrEmail: string, isReset = false): Promise<User> {
+  async findOne(idOrEmail: string, isReset = false): Promise<User | null> {
     if (isReset) {
       await this.cacheManager.del(idOrEmail);
     }
-    const user = await this.cacheManager.get<User>(idOrEmail);
-    if (!user) {
-      const user = await this.prismaService.user.findFirst({
-        where: {
-          OR: [{ id: idOrEmail }, { email: idOrEmail }],
-        },
-      });
-      if (!user) {
-        return null;
-      }
-      await this.cacheManager.set(
-        idOrEmail,
-        user,
-        convertToSecondsUtil(this.configService.get('JWT_EXP')),
-      );
-      return user;
+
+    const cachedUser = await this.cacheManager.get<User>(idOrEmail);
+    if (cachedUser) {
+      return cachedUser;
     }
+
+    const user = await this.prismaService.user.findFirst({
+      where: {
+        OR: [{ id: idOrEmail }, { email: idOrEmail }],
+      },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    await this.cacheManager.set(
+      idOrEmail,
+      user,
+      convertToSecondsUtil(this.configService.get('JWT_EXP')),
+    );
+
     return user;
   }
 
-  async delete(id: string) {
+  async save(user: Partial<User>): Promise<User> {
+    const { email, password, provider, roles } = user;
+
+    const hashedPassword = password ? this.hashPassword(password) : undefined;
+
+    const savedUser = await this.prismaService.user.upsert({
+      where: { email },
+      update: {
+        password: hashedPassword,
+        provider: provider ?? undefined,
+        roles: roles ?? undefined,
+      },
+      create: {
+        email,
+        password: hashedPassword,
+        provider,
+        roles: ['USER'],
+      },
+    });
+
+    await Promise.all([
+      this.cacheManager.set(savedUser.id, savedUser),
+      this.cacheManager.set(savedUser.email, savedUser),
+    ]);
+
+    return savedUser;
+  }
+
+  async delete(id: string): Promise<{ id: string }> {
     const user = await this.findOne(id);
     if (!user) {
       throw new NotFoundException(`User with id - "${id}" not found`);
     }
+
     await this.cacheManager.del(id);
     return this.prismaService.user.delete({
       where: { id },
@@ -81,7 +89,7 @@ export class UserService {
     });
   }
 
-  private hashPassword(password: string) {
+  private hashPassword(password: string): string {
     return hashSync(password, genSaltSync(10));
   }
 }

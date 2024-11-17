@@ -1,4 +1,4 @@
-import { Cookie, Public, UserAgent } from '@common/decorators';
+import { Cookie, CurrentUser, Public, UserAgent } from '@common/decorators';
 import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
@@ -38,6 +38,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { UserService } from 'src/user/user.service';
 
 const REFRESH_TOKEN = 'refreshtoken';
 @ApiTags('Auth')
@@ -46,9 +47,10 @@ const REFRESH_TOKEN = 'refreshtoken';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly userService: UserService,
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
-  ) {}
+  ) { }
 
   @ApiOperation({ summary: 'Регистрация нового пользователя' })
   @ApiBody({ type: RegisterDto })
@@ -93,6 +95,21 @@ export class AuthController {
       );
     }
     this.setRefreshTokenToCookies(tokens, res);
+  }
+
+  @ApiOperation({ summary: 'Получить текущего пользователя' })
+  @ApiBearerAuth()
+  @ApiResponse({
+    status: 200,
+    description: 'Текущий пользователь',
+    type: UserResponse,
+  })
+  @UseInterceptors(ClassSerializerInterceptor)
+  @Get('me')
+  async me(@CurrentUser() user: UserResponse) {
+    const userData = await this.userService.findOne(user.id);
+
+    return new UserResponse(userData);
   }
 
   @ApiOperation({ summary: 'Выход пользователя' })
@@ -148,7 +165,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Авторизация через Google' })
   @UseGuards(GoogleGuard)
   @Get('google')
-  googleAuth() {}
+  googleAuth() { }
 
   @ApiOperation({ summary: 'Callback для авторизации через Google' })
   @UseGuards(GoogleGuard)
@@ -191,7 +208,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Авторизация через Yandex' })
   @UseGuards(YandexGuard)
   @Get('yandex')
-  yandexAuth() {}
+  yandexAuth() { }
 
   @ApiOperation({ summary: 'Callback для авторизации через Yandex' })
   @UseGuards(YandexGuard)

@@ -18,19 +18,19 @@ import {
   ApiBody,
   ApiResponse,
 } from '@nestjs/swagger';
-import { UserService } from '../user.service';
-import { UserResponse } from '../responses';
 import { Roles } from '@common/decorators';
 import { Role, User } from '@prisma/client';
 import { RolesGuard } from 'src/auth/guards/role.guard';
+import { UserResponse } from 'src/user/responses';
+import { UserService } from 'src/user/user.service';
 
-@ApiTags('User Admin')
+@ApiTags('Admin Users')
 @ApiBearerAuth()
 @UseGuards(RolesGuard)
 @Roles(Role.ADMIN)
-@Controller('user/admin')
-export class UserAdminController {
-  constructor(private readonly userService: UserService) {}
+@Controller('admin/user')
+export class AdminUserController {
+  constructor(private readonly userService: UserService) { }
 
   @Get('list')
   @ApiOperation({ summary: 'Получить список пользователей' })
@@ -61,17 +61,6 @@ export class UserAdminController {
     return new UserResponse(user);
   }
 
-  @ApiOperation({ summary: 'Удалить пользователя по ID' })
-  @ApiParam({ name: 'id', description: 'ID пользователя', type: String })
-  @ApiResponse({
-    status: 200,
-    description: 'Пользователь удален',
-  })
-  @Delete(':id')
-  async deleteUser(@Param('id', ParseUUIDPipe) id: string) {
-    return this.userService.delete(id);
-  }
-
   @UseInterceptors(ClassSerializerInterceptor)
   @ApiOperation({ summary: 'Обновить пользователя' })
   @ApiBody({
@@ -83,9 +72,20 @@ export class UserAdminController {
     type: UserResponse,
   })
   @ApiBearerAuth()
-  @Put()
+  @Put(':id')
   async updateUser(@Body() body: Partial<User>) {
     const user = await this.userService.save(body);
     return new UserResponse(user);
+  }
+
+  @ApiOperation({ summary: 'Удалить пользователя по ID' })
+  @ApiParam({ name: 'id', description: 'ID пользователя', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Пользователь удален',
+  })
+  @Delete(':id')
+  async deleteUser(@Param('id', ParseUUIDPipe) id: string) {
+    return this.userService.delete(id);
   }
 }

@@ -6,6 +6,11 @@ import { APP_GUARD } from '@nestjs/core';
 import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
+import { BudgetModule } from './budget/budget.module';
+import { TransactionModule } from './transaction/transaction.module';
+import { AccountModule } from './account/account.module';
+import { CategoryModule } from './category/category.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -14,6 +19,11 @@ import { CacheModule } from '@nestjs/cache-manager';
     PrismaModule,
     AuthModule,
     UserModule,
+    BudgetModule,
+    TransactionModule,
+    AccountModule,
+    CategoryModule,
+    AdminModule,
   ],
   controllers: [],
   providers: [
