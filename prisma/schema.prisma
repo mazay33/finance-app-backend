@@ -23,7 +23,7 @@ enum TransactionType {
 }
 
 model User {
-  id        String    @id @default(uuid())
+  id        String    @id @unique @default(uuid())
   email     String    @unique
   password  String?
   roles     Role[]
@@ -64,7 +64,7 @@ model Transaction {
   user                    User            @relation(fields: [userId], references: [id])
   categoryId              Int
   category                Category        @relation(fields: [categoryId], references: [id])
-  accountId               Int
+  accountId               String
   account                 Account         @relation(fields: [accountId], references: [id])
 
   @@map("transactions")
@@ -82,11 +82,20 @@ model Category {
 }
 
 model Account {
-  id           Int           @id @default(autoincrement())
-  name         String
-  balance      Float
-  userId       String
-  user         User          @relation(fields: [userId], references: [id])
+  id          String  @id @unique @default(uuid())
+  name        String  @unique
+  balance     Float
+  type        String
+  description String
+  isActive    Boolean
+  currency    String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
   transactions Transaction[]
 
   @@map("accounts")
