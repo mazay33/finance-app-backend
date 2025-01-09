@@ -32,12 +32,6 @@ export class AccountService implements IAccountService {
     });
   }
 
-  private async getAccountById(id: string, userId: string): Promise<Account | null> {
-    return this.prisma.account.findUnique({
-      where: { id, userId },
-    });
-  }
-
   private async validateAccountTypeId(accountTypeId: string): Promise<void> {
     const accountTypeExists = await this.prisma.accountType.findUnique({
       where: { id: accountTypeId },
@@ -61,6 +55,13 @@ export class AccountService implements IAccountService {
         throw new ConflictException(`Account with name "${newName}" already exists for the given account type`);
       }
     }
+  }
+
+
+  public async getAccountById(id: string, userId: string): Promise<Account | null> {
+    return this.prisma.account.findUnique({
+      where: { id, userId },
+    });
   }
 
   public async create(createAccountDto: CreateAccountDto, userId: string): Promise<AccountResponseDto> {

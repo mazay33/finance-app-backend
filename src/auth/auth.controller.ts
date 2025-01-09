@@ -108,7 +108,6 @@ export class AuthController {
   @Get('me')
   async me(@CurrentUser() user: UserResponse) {
     const userData = await this.userService.findOne(user.id);
-
     return new UserResponse(userData);
   }
 

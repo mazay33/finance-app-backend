@@ -35,24 +35,28 @@ CREATE TABLE "tokens" (
 
 -- CreateTable
 CREATE TABLE "transactions" (
-    "id" SERIAL NOT NULL,
+    "id" TEXT NOT NULL,
     "amount" DOUBLE PRECISION NOT NULL,
     "type" "TransactionType" NOT NULL,
-    "description" TEXT NOT NULL,
+    "description" TEXT,
     "balanceAfterTransaction" DOUBLE PRECISION NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "date" TIMESTAMP(3) NOT NULL,
     "userId" TEXT NOT NULL,
-    "categoryId" INTEGER NOT NULL,
+    "categoryId" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "transactions_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "categories" (
-    "id" SERIAL NOT NULL,
+    "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "userId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "categories_pkey" PRIMARY KEY ("id")
 );
@@ -85,7 +89,7 @@ CREATE TABLE "account_types" (
 CREATE TABLE "budgets" (
     "id" SERIAL NOT NULL,
     "amount" DOUBLE PRECISION NOT NULL,
-    "categoryId" INTEGER NOT NULL,
+    "categoryId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -114,6 +118,15 @@ CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 CREATE UNIQUE INDEX "tokens_token_key" ON "tokens"("token");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "transactions_id_key" ON "transactions"("id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "categories_id_key" ON "categories"("id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "categories_name_key" ON "categories"("name");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "accounts_id_key" ON "accounts"("id");
 
 -- CreateIndex
@@ -138,7 +151,7 @@ ALTER TABLE "transactions" ADD CONSTRAINT "transactions_categoryId_fkey" FOREIGN
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "accounts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "categories" ADD CONSTRAINT "categories_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "categories" ADD CONSTRAINT "categories_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_accountTypeId_fkey" FOREIGN KEY ("accountTypeId") REFERENCES "account_types"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

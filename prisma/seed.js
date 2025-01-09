@@ -23,6 +23,29 @@ async function main() {
   }
 
   console.log('Типы счетов успешно добавлены.');
+
+// Добавление дефолтных категорий
+const defaultCategories = [
+  { name: 'Продукты', userId: null },
+  { name: 'Транспорт', userId: null },
+  { name: 'Развлечения', userId: null },
+  { name: 'Здоровье', userId: null },
+  { name: 'Жилье', userId: null },
+  { name: 'Образование', userId: null },
+  { name: 'Подарки', userId: null },
+];
+
+console.log('Добавляем дефолтные категории в таблицу Category...');
+
+for (const category of defaultCategories) {
+  await prisma.category.upsert({
+    where: { name: category.name }, // Уникальное поле для проверки существования
+    update: {}, // Если категория существует, ничего не обновляем
+    create: { ...category }, // Создаем новую категорию
+  });
+}
+
+  console.log('Дефолтные категории успешно добавлены.');
 }
 
 main()

@@ -64,29 +64,37 @@ model Token {
 }
 
 model Transaction {
-  id                      Int             @id @default(autoincrement())
+  id                      String          @id @unique @default(uuid())
   amount                  Float
   type                    TransactionType
-  description             String
+  description             String?
   balanceAfterTransaction Float
-  createdAt               DateTime        @default(now())
-  userId                  String
-  user                    User            @relation(fields: [userId], references: [id])
-  categoryId              Int
-  category                Category        @relation(fields: [categoryId], references: [id])
-  accountId               String
-  account                 Account         @relation(fields: [accountId], references: [id])
+  date                    DateTime
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("transactions")
 }
 
 model Category {
-  id           Int           @id @default(autoincrement())
-  name         String
-  userId       String
-  user         User          @relation(fields: [userId], references: [id])
-  transactions Transaction[]
-  Budget       Budget[]
+  id          String        @id @unique @default(uuid())
+  name        String        @unique
+  userId      String?
+  user        User?         @relation(fields: [userId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  Transaction Transaction[]
+  Budget      Budget[]
 
   @@map("categories")
 }
@@ -125,7 +133,7 @@ model AccountType {
 model Budget {
   id         Int      @id @default(autoincrement())
   amount     Float
-  categoryId Int
+  categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
   userId     String
   user       User     @relation(fields: [userId], references: [id])

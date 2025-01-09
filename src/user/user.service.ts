@@ -20,6 +20,7 @@ export class UserService {
   }
 
   async findOne(idOrEmail: string, isReset = false): Promise<User | null> {
+
     if (isReset) {
       await this.cacheManager.del(idOrEmail);
     }
