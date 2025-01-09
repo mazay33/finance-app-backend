@@ -22,6 +22,16 @@ enum TransactionType {
   DEBIT
 }
 
+enum AccountTypeEnum {
+  CASH // Наличные
+  DEBIT_CARD // Дебетовая карта
+  CREDIT_CARD // Кредитная карта
+  VIRTUAL_ACCOUNT // Виртуальный счет
+  INVESTMENT // Инвестиции
+  RECEIVABLES // Дебиторская задолженность
+  PAYABLES // Кредиторская задолженность
+}
+
 model User {
   id        String    @id @unique @default(uuid())
   email     String    @unique
@@ -81,14 +91,17 @@ model Category {
   @@map("categories")
 }
 
+// Account
 model Account {
   id          String  @id @unique @default(uuid())
   name        String  @unique
   balance     Float
-  type        String
   description String
   isActive    Boolean
   currency    String
+
+  accountTypeId String
+  accountType   AccountType @relation(fields: [accountTypeId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -99,6 +112,14 @@ model Account {
   transactions Transaction[]
 
   @@map("accounts")
+}
+
+model AccountType {
+  id       String          @id @unique @default(uuid())
+  name     AccountTypeEnum @unique
+  accounts Account[]
+
+  @@map("account_types")
 }
 
 model Budget {

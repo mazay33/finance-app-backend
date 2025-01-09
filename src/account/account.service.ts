@@ -20,24 +20,59 @@ interface IAccountService {
 export class AccountService implements IAccountService {
   constructor(private readonly prisma: PrismaService) { }
 
-  private readonly logger = new Logger(AccountService.name)
+  private readonly logger = new Logger(AccountService.name);
 
   private mapToAccountResponse(account: Account): AccountResponseDto {
     return plainToClass(AccountResponseDto, account);
   }
 
-  private getAllAccounts = async (userId: string): Promise<Account[]> => {
+  private async getAllAccounts(userId: string): Promise<Account[]> {
     return await this.prisma.account.findMany({
       where: { userId },
     });
+  }
+
+  private async getAccountById(id: string, userId: string): Promise<Account | null> {
+    return this.prisma.account.findUnique({
+      where: { id, userId },
+    });
+  }
+
+  private async validateAccountTypeId(accountTypeId: string): Promise<void> {
+    const accountTypeExists = await this.prisma.accountType.findUnique({
+      where: { id: accountTypeId },
+    });
+
+    if (!accountTypeExists) {
+      throw new NotFoundException(`Invalid account type specified: ${accountTypeId}`);
+    }
+  }
+
+  private async validateUniqueAccountName(accountTypeId: string, newName: string, currentName: string): Promise<void> {
+    if (newName !== currentName) {
+      const existingAccount = await this.prisma.account.findFirst({
+        where: {
+          accountTypeId,
+          name: newName,
+        },
+      });
+
+      if (existingAccount) {
+        throw new ConflictException(`Account with name "${newName}" already exists for the given account type`);
+      }
+    }
   }
 
   public async create(createAccountDto: CreateAccountDto, userId: string): Promise<AccountResponseDto> {
     this.logger.log(`Creating account for user ${userId} with data: ${JSON.stringify(createAccountDto)}`);
     try {
 
+      if (createAccountDto.accountTypeId) {
+        await this.validateAccountTypeId(createAccountDto.accountTypeId);
+      }
+
       const accountExists = await this.prisma.account.findFirst({
-        where: { name: createAccountDto.name },
+        where: { name: createAccountDto.name, userId, accountTypeId: createAccountDto.accountTypeId },
       });
 
       if (accountExists) {
@@ -63,6 +98,36 @@ export class AccountService implements IAccountService {
     }
   }
 
+  public async update(id: string, updateAccountDto: UpdateAccountDto, userId: string): Promise<AccountResponseDto> {
+    this.logger.log(`Updating account with id ${id}`);
+    try {
+
+      const currentAccount = await this.getAccountById(id, userId);
+      if (!currentAccount) {
+        throw new NotFoundException(`Account with id - "${id}" not found`);
+      }
+
+      if (updateAccountDto.accountTypeId && updateAccountDto.name) {
+        await this.validateAccountTypeId(updateAccountDto.accountTypeId);
+        await this.validateUniqueAccountName(updateAccountDto.accountTypeId, updateAccountDto.name, currentAccount.name);
+      }
+
+      const updatedAccount = await this.prisma.account.update({
+        where: { id, userId },
+        data: updateAccountDto,
+      });
+
+      this.logger.log(`Account updated successfully: ${JSON.stringify(updatedAccount)}`);
+      return this.mapToAccountResponse(updatedAccount);
+    } catch (error) {
+      this.logger.error(`Failed to update account: ${error.message}`);
+      throw new HttpException(
+        error.message || `Failed to update account with id ${id}`,
+        error.status || HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   public async findAll(userId: string): Promise<AccountResponseDto[]> {
     this.logger.log(`Finding all accounts for user ${userId}`);
     try {
@@ -82,7 +147,7 @@ export class AccountService implements IAccountService {
   public async findOne(id: string, userId: string): Promise<AccountResponseDto> {
     this.logger.log(`Finding account with id ${id}`);
     try {
-      const account = await this.prisma.account.findUnique({
+      const account = await this.prisma.account.findFirst({
         where: { id, userId },
       });
 
@@ -101,39 +166,13 @@ export class AccountService implements IAccountService {
     }
   }
 
-  public async update(id: string, updateAccountDto: UpdateAccountDto, userId: string): Promise<AccountResponseDto> {
-    this.logger.log(`Updating account with id ${id}`);
-    try {
-
-      if (updateAccountDto.name) {
-        const accountExists = await this.prisma.account.findFirst({
-          where: { name: updateAccountDto.name, userId, NOT: { id } },
-        });
-
-        if (accountExists) {
-          throw new ConflictException('Account with this name already exists');
-        }
-      }
-
-      const account = await this.prisma.account.update({
-        where: { id, userId },
-        data: updateAccountDto,
-      });
-
-      this.logger.log(`Account updated successfully: ${JSON.stringify(account)}`);
-      return this.mapToAccountResponse(account);
-    } catch (error) {
-      this.logger.error(`Failed to update account: ${error.message}`);
-      throw new HttpException(
-        error.message || `Failed to update account with id ${id}`,
-        error.status || HttpStatus.BAD_REQUEST,
-      );
-    }
-  }
-
   public async delete(id: string, userId: string): Promise<void> {
     this.logger.log(`Deleting account with id ${id}`);
     try {
+      const accountExists = await this.getAccountById(id, userId);
+      if (!accountExists) {
+        throw new NotFoundException(`Account with id - "${id}" not found`);
+      }
       await this.prisma.account.delete({
         where: { id, userId },
       });

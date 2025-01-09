@@ -7,6 +7,9 @@ CREATE TYPE "Role" AS ENUM ('USER', 'ADMIN');
 -- CreateEnum
 CREATE TYPE "TransactionType" AS ENUM ('CREDIT', 'DEBIT');
 
+-- CreateEnum
+CREATE TYPE "AccountTypeEnum" AS ENUM ('CASH', 'DEBIT_CARD', 'CREDIT_CARD', 'VIRTUAL_ACCOUNT', 'INVESTMENT', 'RECEIVABLES', 'PAYABLES');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" TEXT NOT NULL,
@@ -59,15 +62,23 @@ CREATE TABLE "accounts" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "balance" DOUBLE PRECISION NOT NULL,
-    "type" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL,
     "currency" TEXT NOT NULL,
+    "accountTypeId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "userId" TEXT NOT NULL,
 
     CONSTRAINT "accounts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "account_types" (
+    "id" TEXT NOT NULL,
+    "name" "AccountTypeEnum" NOT NULL,
+
+    CONSTRAINT "account_types_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -108,6 +119,12 @@ CREATE UNIQUE INDEX "accounts_id_key" ON "accounts"("id");
 -- CreateIndex
 CREATE UNIQUE INDEX "accounts_name_key" ON "accounts"("name");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "account_types_id_key" ON "account_types"("id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "account_types_name_key" ON "account_types"("name");
+
 -- AddForeignKey
 ALTER TABLE "tokens" ADD CONSTRAINT "tokens_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -122,6 +139,9 @@ ALTER TABLE "transactions" ADD CONSTRAINT "transactions_accountId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "categories" ADD CONSTRAINT "categories_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_accountTypeId_fkey" FOREIGN KEY ("accountTypeId") REFERENCES "account_types"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

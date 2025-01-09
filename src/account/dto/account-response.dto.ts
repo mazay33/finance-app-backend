@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { Account } from "@prisma/client";
+import { Account, $Enums } from "@prisma/client";
 import { Exclude } from "class-transformer";
 
 export class AccountResponseDto implements Account {
@@ -13,7 +13,7 @@ export class AccountResponseDto implements Account {
   balance: number;
 
   @ApiProperty()
-  type: string;
+  accountTypeId: string;
 
   @ApiProperty()
   description: string;

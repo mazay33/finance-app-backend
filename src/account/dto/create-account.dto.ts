@@ -21,11 +21,11 @@ export class CreateAccountDto {
 
   @ApiProperty({
     description: 'The type of the account',
-    example: 'savings',
+    example: '2ef88f58-ecc4-415d-a03c-57418c7c711f',
   })
   @IsString()
   @IsNotEmpty()
-  type: string
+  accountTypeId: string
 
   @ApiProperty({
     description: 'The description of the account',
