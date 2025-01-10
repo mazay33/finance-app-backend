@@ -42,7 +42,6 @@ import { UserService } from 'src/user/user.service';
 
 const REFRESH_TOKEN = 'refreshtoken';
 @ApiTags('Auth')
-@Public()
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -62,6 +61,7 @@ export class AuthController {
   @ApiBadRequestResponse({
     description: 'Не получается зарегистрировать пользователя',
   })
+  @Public()
   @UseInterceptors(ClassSerializerInterceptor)
   @Post('register')
   async register(@Body() dto: RegisterDto) {
@@ -80,6 +80,7 @@ export class AuthController {
     status: HttpStatus.OK,
     description: 'Пользователь успешно вошел',
   })
+  @Public()
   @ApiBadRequestResponse({ description: 'Не получается войти' })
   @Post('login')
   async login(
@@ -143,6 +144,7 @@ export class AuthController {
     status: HttpStatus.OK,
     description: 'Токены успешно обновлены',
   })
+  @Public()
   @ApiUnauthorizedResponse({ description: 'Неавторизованный запрос' })
   @Get('refresh-tokens')
   async refreshTokens(
@@ -164,11 +166,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Авторизация через Google' })
   @UseGuards(GoogleGuard)
   @Get('google')
+  @Public()
   googleAuth() { }
 
   @ApiOperation({ summary: 'Callback для авторизации через Google' })
   @UseGuards(GoogleGuard)
   @Get('google/callback')
+  @Public()
   googleAuthCallback(
     @Req() req: Request extends { user: Tokens } ? Request : any,
     @Res() res: Response,
@@ -186,6 +190,7 @@ export class AuthController {
     description: 'Успешная авторизация через Google',
   })
   @Get('success-google')
+  @Public()
   successGoogle(
     @Query('token') token: string,
     @UserAgent() agent: string,
@@ -207,11 +212,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Авторизация через Yandex' })
   @UseGuards(YandexGuard)
   @Get('yandex')
+  @Public()
   yandexAuth() { }
 
   @ApiOperation({ summary: 'Callback для авторизации через Yandex' })
   @UseGuards(YandexGuard)
   @Get('yandex/callback')
+  @Public()
   yandexAuthCallback(
     @Req() req: Request extends { user: Tokens } ? Request : any,
     @Res() res: Response,
@@ -229,6 +236,7 @@ export class AuthController {
     description: 'Успешная авторизация через Yandex',
   })
   @Get('success-yandex')
+  @Public()
   successYandex(
     @Query('token') token: string,
     @UserAgent() agent: string,
