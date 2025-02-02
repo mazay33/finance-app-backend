@@ -2,11 +2,12 @@ import { BadRequestException, HttpException, HttpStatus, Injectable, Logger, Not
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { Prisma, Transaction } from '@prisma/client';
-import { endOfDay, startOfDay, startOfWeek } from 'date-fns';
+import { addDays, addWeeks, startOfWeek, subDays } from 'date-fns';
 import { TransactionResponseDto } from './dto/transaction-response.dto';
 import { plainToClass } from 'class-transformer';
 import { AccountService } from 'src/account/account.service';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { endOfDay, startOfDay } from '@common/helpers';
 
 @Injectable()
 export class TransactionService {
@@ -154,140 +155,187 @@ export class TransactionService {
     }
   }
 
+
+  public async getDailyBalanceWithTransactions(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+    interval: 'daily' | 'weekly',
+  ) {
+    // Validate input dates
+    const start = startOfDay(new Date(startDate));
+    const end = endOfDay(new Date(endDate));
+
+    if (start > end) {
+      throw new BadRequestException('Start date must be before end date');
+    }
+
+    // Fetch transactions within date range
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        userId,
+        date: { gte: start, lte: end },
+      },
+      orderBy: { date: 'asc' },
+      include: { category: true, account: true },
+    });
+
+    // Get initial balance
+    const initialBalance = await this.getTotalBalanceOnDate(
+      userId,
+      subDays(start, 1)
+    );
+
+    const dateMap = this.initializeDateMap(start, end, interval, initialBalance);
+
+    // Process transactions
+    let currentBalance = initialBalance;
+    for (const transaction of transactions) {
+      const periodKey = this.getPeriodKey(transaction.date, interval);
+      const periodData = dateMap.get(periodKey);
+
+      if (periodData) {
+        periodData.transactions.push(transaction);
+        currentBalance += this.getTransactionImpact(transaction);
+        periodData.balance = currentBalance;
+      }
+    }
+
+    // Finalize balances
+    return this.finalizeBalances(dateMap, interval);
+  }
+
+  private getTransactionImpact(transaction: Transaction): number {
+    return transaction.type === 'CREDIT'
+      ? -transaction.amount
+      : transaction.amount;
+  }
+
+  private initializeDateMap(
+    start: Date,
+    end: Date,
+    interval: 'daily' | 'weekly',
+    initialBalance: number
+  ): Map<string, { balance: number; transactions: Transaction[] }> {
+    const dateMap = new Map();
+
+    if (interval === 'daily') {
+      let currentDate = new Date(start);
+      while (currentDate <= end) {
+        const dateKey = this.getPeriodKey(currentDate, 'daily');
+        dateMap.set(dateKey, {
+          balance: initialBalance,
+          transactions: []
+        });
+        currentDate = addDays(currentDate, 1);
+      }
+    } else {
+      const firstWeekStart = startOfWeek(start);
+      const lastWeekStart = startOfWeek(end);
+      let currentWeek = firstWeekStart;
+
+      while (currentWeek <= lastWeekStart) {
+        const weekKey = this.getPeriodKey(currentWeek, 'weekly');
+        dateMap.set(weekKey, {
+          balance: initialBalance,
+          transactions: []
+        });
+        currentWeek = addWeeks(currentWeek, 1);
+      }
+    }
+
+    return dateMap;
+  }
+
+  private getPeriodKey(date: Date, interval: 'daily' | 'weekly'): string {
+    const targetDate = new Date(date);
+    return interval === 'daily'
+      ? targetDate.toISOString().split('T')[0]
+      : startOfWeek(targetDate).toISOString().split('T')[0];
+  }
+
+  private finalizeBalances(
+    dateMap: Map<string, { balance: number; transactions: Transaction[] }>,
+    interval: 'daily' | 'weekly'
+  ) {
+    const sortedKeys = Array.from(dateMap.keys()).sort();
+    const result: Array<{
+      date: string;
+      balance: number;
+      transactions: Transaction[];
+    }> = [];
+
+    let lastBalance = dateMap.get(sortedKeys[0])?.balance || 0;
+
+    for (const key of sortedKeys) {
+      const periodData = dateMap.get(key);
+      if (!periodData) continue;
+
+      // Carry forward balance for periods with no transactions
+      if (periodData.transactions.length === 0) {
+        periodData.balance = lastBalance;
+      }
+
+      result.push({
+        date: key,
+        balance: periodData.balance,
+        transactions: periodData.transactions,
+      });
+
+      lastBalance = periodData.balance;
+    }
+
+    return result;
+  }
+
+  private async getTotalBalanceOnDate(userId: string, date: Date) {
+    const [creditResult, debitResult] = await Promise.all([
+      this.prisma.transaction.aggregate({
+        where: {
+          userId,
+          date: { lt: date },
+          type: 'CREDIT',
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: {
+          userId,
+          date: { lt: date },
+          type: 'DEBIT',
+        },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return (debitResult._sum.amount || 0) - (creditResult._sum.amount || 0);
+  }
+
+
+  // async getExpensesByCategory(userId: string, start?: Date, end?: Date): Promise<Record<string, number>> {
+  //   const where: Prisma.TransactionWhereInput = {
+  //     userId,
+  //     // type: 'credit',
+  //   };
+
+  //   if (startDate) {
+  //     where.createdAt = { gte: startOfDay(startDate) };
+  //   }
+  //   if (endDate) {
+  //     where.createdAt = { lte: endOfDay(endDate) };
+  //   }
+
+  //   const transactions = await this.prisma.transaction.findMany({
+  //     where,
+  //     include: { category: true },
+  //   });
+
+  //   const expensesByCategory = transactions.reduce((acc, transaction) => {
+  //     const categoryName = transaction.category?.name || 'Uncategorized'; // Handle missing categories
+  //     acc[categoryName] = (acc[categoryName] || 0) + transaction.amount;
+  //     return acc;
+  //   }, {} as Record<string, number>);
+
+  //   return expensesByCategory;
+  // }
 }
-// async getBalances(
-//   userId: string,
-//   startDate: Date,
-//   endDate: Date,
-//   interval: 'daily' | 'weekly',
-// ) {
-//   // Fetch all transactions in the given period
-//   const transactions = await this.prisma.transaction.findMany({
-//     where: {
-//       userId,
-//       createdAt: { gte: startOfDay(startDate), lt: endOfDay(endDate) },
-//     },
-//     orderBy: { createdAt: 'asc' },
-//     include: { category: true, account: true },
-//   });
-
-//   // Get the initial balance before the startDate
-//   const initialBalance = await this.getTotalBalanceOnDate(
-//     userId,
-//     new Date(startDate.getTime() - 86400000),
-//   ); // Previous day
-
-//   let currentBalance = initialBalance;
-//   const balances: Array<{
-//     date: string;
-//     balance: number;
-//     transactions: Transaction[];
-//   }> = [];
-
-//   const dateMap = new Map<
-//     string,
-//     { balance: number; transactions: Transaction[] }
-//   >();
-
-//   // Initialize balances based on the interval
-//   // if (interval === 'daily') {
-//   //   for (
-//   //     let d = new Date(startDate);
-//   //     d <= endDate;
-//   //     d.setDate(d.getDate() + 1)
-//   //   ) {
-//   //     const dateStr = d.toISOString().split('T')[0];
-//   //     dateMap.set(dateStr, { balance: currentBalance, transactions: [] });
-//   //   }
-//   // } else if (interval === 'weekly') {
-//   //   for (
-//   //     let d = new Date(startDate);
-//   //     d <= endDate;
-//   //     d.setDate(d.getDate() + 7)
-//   //   ) {
-//   //     const weekStart = startOfWeek(d).toISOString().split('T')[0];
-//   //     dateMap.set(weekStart, { balance: currentBalance, transactions: [] });
-//   //   }
-//   // }
-
-//   // Process transactions and update balances
-//   for (const transaction of transactions) {
-//     let dateStr: string;
-
-//     if (interval === 'daily') {
-//       dateStr = transaction.createdAt.toISOString().split('T')[0];
-//     } else if (interval === 'weekly') {
-//       const transactionDate = new Date(transaction.createdAt);
-//       dateStr = startOfWeek(transactionDate).toISOString().split('T')[0];
-//     }
-
-//     const periodData = dateMap.get(dateStr);
-
-//     // if (periodData) {
-//     //   periodData.transactions.push(transaction);
-//     //   currentBalance +=
-//     //     transaction.type === 'credit'
-//     //       ? -transaction.amount
-//     //       : transaction.amount;
-//     //   periodData.balance = currentBalance;
-//     // }
-//   }
-
-//   // // Finalize balances
-//   // let lastBalance = initialBalance;
-//   // for (const [date, data] of dateMap) {
-//   //   if (data.transactions.length === 0) data.balance = lastBalance;
-//   //   lastBalance = data.balance;
-//   //   balances.push({
-//   //     date,
-//   //     balance: data.balance,
-//   //     transactions: data.transactions,
-//   //   });
-//   // }
-
-//   // return balances;
-// }
-
-// async getTotalBalanceOnDate(userId: string, date: Date) {
-//   const transactions = await this.prisma.transaction.findMany({
-//     where: {
-//       userId,
-//       createdAt: { lte: date },
-//     },
-//     orderBy: { createdAt: 'asc' },
-//   });
-
-//   // return transactions.reduce((balance, transaction) => {
-//   //   return transaction.type === 'credit'
-//   //     ? balance - transaction.amount
-//   //     : balance + transaction.amount;
-//   // }, 0);
-// }
-
-// async getExpensesByCategory(userId: string, startDate?: Date, endDate?: Date): Promise<Record<string, number>> {
-//   const where: Prisma.TransactionWhereInput = {
-//     userId,
-//     // type: 'credit',
-//   };
-
-//   if (startDate) {
-//     where.createdAt = { gte: startOfDay(startDate) };
-//   }
-//   if (endDate) {
-//     where.createdAt = { lte: endOfDay(endDate) };
-//   }
-
-//   const transactions = await this.prisma.transaction.findMany({
-//     where,
-//     include: { category: true },
-//   });
-
-//   const expensesByCategory = transactions.reduce((acc, transaction) => {
-//     const categoryName = transaction.category?.name || 'Uncategorized'; // Handle missing categories
-//     acc[categoryName] = (acc[categoryName] || 0) + transaction.amount;
-//     return acc;
-//   }, {} as Record<string, number>);
-
-//   return expensesByCategory;
-// }
-// }

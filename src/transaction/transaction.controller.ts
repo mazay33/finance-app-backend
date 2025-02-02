@@ -13,6 +13,9 @@ import { UpdateTransactionDto } from './dto/update-transaction.dto';
 export class TransactionController {
   constructor(private readonly transactionService: TransactionService) { }
 
+  //TODO: refactor, replace with service
+
+
   @Post()
   create(
     @CurrentUser() user: JwtPayload,
@@ -54,20 +57,8 @@ export class TransactionController {
   }
 
 
-  // @Get('daily-balances')
-  // async getBalances(
-  //   @CurrentUser() user: JwtPayload,
-  //   @Query('startDate')
-  //   startDate: string,
-  //   @Query('endDate') endDate: string,
-  //   @Query('interval') interval: 'daily' | 'weekly',
-  // ) {
-  //   const start = new Date(startDate);
-  //   const end = new Date(endDate);
-  //   end.setHours(23, 59, 59, 999);
 
-  //   return this.transactionService.getBalances(user.id, start, end, interval);
-  // }
+
 
   // @Get('expenses-by-category')
   // @ApiQuery({ name: 'startDate', required: false })
