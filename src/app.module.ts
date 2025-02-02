@@ -11,6 +11,7 @@ import { TransactionModule } from './transaction/transaction.module';
 import { AccountModule } from './account/account.module';
 import { CategoryModule } from './category/category.module';
 import { AdminModule } from './admin/admin.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AdminModule } from './admin/admin.module';
     AccountModule,
     CategoryModule,
     AdminModule,
+    DashboardModule,
   ],
   controllers: [],
   providers: [
