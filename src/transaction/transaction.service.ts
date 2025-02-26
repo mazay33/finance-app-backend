@@ -153,7 +153,12 @@ export class TransactionService {
       const [transactions, total] = await Promise.all([
         this.prisma.transaction.findMany({
           where,
-          orderBy: sortBy ? { [sortBy]: order || 'desc' } : undefined,
+          orderBy: sortBy
+            ? [
+              { [sortBy]: order || 'desc' },
+              { createdAt: 'desc' }
+            ]
+            : undefined,
           skip: (page - 1) * limit,
           take: limit,
         }),
