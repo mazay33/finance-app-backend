@@ -15,7 +15,9 @@ async function start() {
   });
   app.use(cookieParser());
   app.setGlobalPrefix('api');
-  app.useGlobalPipes(new ValidationPipe());
+  app.useGlobalPipes(new ValidationPipe(
+    { transform: true, }
+  ));
 
   const config = new DocumentBuilder()
     .setTitle('finance-app')

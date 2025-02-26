@@ -1,9 +1,14 @@
+import { Pagination } from "@common/types";
 import { ApiProperty } from "@nestjs/swagger";
 import { $Enums, Account, Category, Transaction } from "@prisma/client";
 import { Exclude } from "class-transformer";
-import { AccountResponseDto } from "src/account/dto/account-response.dto";
 
-export class TransactionResponseDto implements Transaction {
+export class TransactionResponseDto {
+  data: TransactionDto[];
+  pagination: Pagination;
+}
+
+export class TransactionDto implements Transaction {
   @ApiProperty()
   id: string;
 
@@ -24,9 +29,6 @@ export class TransactionResponseDto implements Transaction {
 
   @ApiProperty()
   date: Date;
-
-  @ApiProperty()
-  balanceAfterTransaction: number;
 
   @ApiProperty()
   category: Category;

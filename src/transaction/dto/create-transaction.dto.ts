@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString, IsUUID, Min } from 'class-validator';
+import { IsISO8601, IsNotEmpty, IsNumber, IsString, IsUUID, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { $Enums } from '@prisma/client';
 
@@ -47,11 +47,11 @@ export class CreateTransactionDto {
   accountId: string;
 
   @ApiProperty({
-    description: 'The date of the transaction',
-    example: '2024-10-15',
+    description: 'The date of the transaction in ISO 8601 format',
+    example: '2025-01-10T13:58:21.538Z',
     type: String,
   })
-  @IsString()
+  @IsISO8601({ strict: true })
   @IsNotEmpty()
   date: string;
 }

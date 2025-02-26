@@ -1,6 +1,6 @@
-import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsISO8601, IsOptional, IsNumber, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { $Enums } from '@prisma/client';
+import { TransactionType } from '@prisma/client';
 
 export class UpdateTransactionDto {
   @ApiProperty({
@@ -9,17 +9,17 @@ export class UpdateTransactionDto {
     type: Number,
   })
   @IsNumber()
-  @IsNotEmpty()
-  amount: number;
+  @IsOptional()
+  amount?: number;
 
   @ApiProperty({
     description: 'The type of the transaction (e.g., credit, debit)',
     example: 'credit',
-    enum: $Enums.TransactionType,
+    enum: TransactionType,
   })
   @IsString()
-  @IsNotEmpty()
-  type: $Enums.TransactionType;
+  @IsOptional()
+  type?: TransactionType
 
   @ApiProperty({
     description: 'A brief description of the transaction',
@@ -27,6 +27,7 @@ export class UpdateTransactionDto {
     type: String,
   })
   @IsString()
+  @IsOptional()
   description?: string;
 
   @ApiProperty({
@@ -35,8 +36,8 @@ export class UpdateTransactionDto {
     type: String,
   })
   @IsString()
-  @IsNotEmpty()
-  categoryId: string;
+  @IsOptional()
+  categoryId?: string;
 
   @ApiProperty({
     description: 'The ID of the account associated with this transaction',
@@ -44,15 +45,15 @@ export class UpdateTransactionDto {
     type: String,
   })
   @IsString()
-  @IsNotEmpty()
-  accountId: string;
+  @IsOptional()
+  accountId?: string;
 
   @ApiProperty({
-    description: 'The date of the transaction',
-    example: '2024-10-15',
+    description: 'The date of the transaction in ISO 8601 format',
+    example: '2025-01-10T13:58:21.538Z',
     type: String,
   })
-  @IsString()
-  @IsNotEmpty()
-  date: string;
+  @IsISO8601()
+  @IsOptional()
+  date?: string;
 }

@@ -17,6 +17,6 @@ export class DashboardController {
   ) {
     const { startDate, endDate, interval } = body;
 
-    return this.transactionService.getDailyBalanceWithTransactions(user.id, startDate, endDate, interval);
+    // return this.transactionService.getDailyBalanceWithTransactions(user.id, startDate, endDate, interval);
   }
 }

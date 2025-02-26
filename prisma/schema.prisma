@@ -64,12 +64,11 @@ model Token {
 }
 
 model Transaction {
-  id                      String          @id @unique @default(uuid())
-  amount                  Float
-  type                    TransactionType
-  description             String?
-  balanceAfterTransaction Float
-  date                    DateTime
+  id          String          @id @unique @default(uuid())
+  amount      Float
+  type        TransactionType
+  description String?
+  date        DateTime
 
   userId String
   user   User   @relation(fields: [userId], references: [id])

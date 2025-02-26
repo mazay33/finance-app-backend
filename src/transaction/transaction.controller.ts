@@ -6,6 +6,7 @@ import { JwtPayload } from 'src/auth/interfaces';
 import { ApiBearerAuth, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { TransactionResponseDto } from './dto/transaction-response.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { TransactionQueryDto } from './dto/transaction-query.dto';
 
 @ApiBearerAuth()
 @ApiTags('Transaction')
@@ -31,8 +32,10 @@ export class TransactionController {
     isArray: true,
     type: TransactionResponseDto,
   })
-  findAll(@CurrentUser() user: JwtPayload) {
-    return this.transactionService.findAll(user.id);
+  findAll(@CurrentUser() user: JwtPayload, @Query() query: TransactionQueryDto) {
+    console.log(query);
+
+    return this.transactionService.findAll(user.id, query);
   }
 
   @Get(':id')
