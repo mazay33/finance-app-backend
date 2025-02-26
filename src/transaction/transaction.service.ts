@@ -1,341 +1,356 @@
-import { BadRequestException, HttpException, HttpStatus, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { Prisma, Transaction } from '@prisma/client';
-import { addDays, addWeeks, startOfWeek, subDays } from 'date-fns';
-import { TransactionResponseDto } from './dto/transaction-response.dto';
 import { plainToClass } from 'class-transformer';
-import { AccountService } from 'src/account/account.service';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
-import { endOfDay, startOfDay } from '@common/helpers';
+import { TransactionQueryDto } from './dto/transaction-query.dto';
+import {
+  TransactionDto,
+  TransactionResponseDto,
+} from './dto/transaction-response.dto';
+import { mapToPaginationResponse } from '@common/utils';
 
 @Injectable()
 export class TransactionService {
-  constructor(private readonly prisma: PrismaService, private readonly accountService: AccountService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+  ) { }
 
-  private readonly logger = new Logger(TransactionService.name)
+  private readonly logger = new Logger(TransactionService.name);
 
-  private mapToTransactionResponse(transaction: Transaction): TransactionResponseDto {
-    return plainToClass(TransactionResponseDto, transaction);
+  private mapToTransactionResponse(transaction: Transaction): TransactionDto {
+    return plainToClass(TransactionDto, transaction);
   }
 
   private validateTransactionType(type: string): void {
-    const validTypes = ['CREDIT', 'DEBIT'];
-    if (!validTypes.includes(type)) {
-      throw new BadRequestException(`Invalid transaction type: ${type}. Valid types are: ${validTypes.join(', ')}`);
-    }
-  }
-
-  public async create(createTransactionDto: CreateTransactionDto, userId: string): Promise<TransactionResponseDto> {
-    this.logger.log('Creating transcation for user ' + userId + ' with data: ' + JSON.stringify(createTransactionDto));
-    try {
-
-      const { date, categoryId, accountId, amount, type, description } = createTransactionDto;
-
-      this.validateTransactionType(type);
-
-      const category = await this.prisma.category.findUnique({
-        where: { id: categoryId },
-      });
-      if (!category)
-        throw new NotFoundException(`Category with ID ${categoryId} not found`);
-
-      // Validate account existence
-      const account = await this.accountService.getAccountById(accountId, userId);
-      if (!account)
-        throw new NotFoundException(`Account with ID ${accountId} not found`);
-
-      // Update account balance based on transaction type
-      const balanceChange = type === 'CREDIT' ? -amount : amount;
-      const newBalance = account.balance + balanceChange;
-
-      // Update account balance
-      const updatedAccount = await this.accountService.update(
-        accountId,
-        { ...account, balance: newBalance },
-        userId
-      );
-
-      // Create transaction
-      const transaction = await this.prisma.transaction.create({
-        data: {
-          description,
-          amount,
-          type,
-          date,
-          balanceAfterTransaction: updatedAccount.balance,
-          user: { connect: { id: userId } },
-          category: { connect: { id: categoryId } },
-          account: { connect: { id: accountId } },
-        },
-      });
-
-      this.logger.log('Transaction created successfully: ' + JSON.stringify(transaction));
-
-      return this.mapToTransactionResponse(transaction);
-    } catch (error) {
-      this.logger.error('Failed to create transaction: ' + error.message);
-      throw new HttpException(
-        error.message || 'Failed to create transaction',
-        error.status || HttpStatus.BAD_REQUEST,
+    if (!['CREDIT', 'DEBIT'].includes(type)) {
+      throw new BadRequestException(
+        `Invalid transaction type: ${type}. Valid types are CREDIT, DEBIT`,
       );
     }
   }
 
-  public async findAll(userId: string): Promise<TransactionResponseDto[]> {
-    this.logger.log('Finding all transactions for user ' + userId);
-    try {
-      const transactions = await this.prisma.transaction.findMany({
-        where: { userId },
-        orderBy: { date: 'desc' },
-      });
-      this.logger.log('Found ' + transactions.length + ' transactions for user ' + userId);
-      return transactions.map((transaction) => this.mapToTransactionResponse(transaction));
-    } catch (error) {
-      this.logger.error('Failed to find all transactions: ' + error.message);
-      throw new HttpException(
-        error.message || 'Failed to find all transactions',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+
+  private handleError(error: Error, defaultMessage: string): never {
+    this.logger.error(`${defaultMessage}: ${error.message}`, error.stack);
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      throw new BadRequestException('Database operation failed');
     }
+
+    if (error instanceof HttpException) {
+      throw error;
+    }
+
+    throw new InternalServerErrorException(defaultMessage);
   }
 
-  public async findOne(id: string, userId: string): Promise<TransactionResponseDto> {
-    this.logger.log('Finding transaction with ID ' + id + ' for user ' + userId);
-    try {
-      const transaction = await this.prisma.transaction.findFirst({
-        where: { id, userId },
-      });
-      if (!transaction)
-        throw new NotFoundException(`Transaction with ID ${id} not found`);
-      this.logger.log('Found transaction with ID ' + id + ' for user ' + userId);
-      return this.mapToTransactionResponse(transaction);
-    } catch (error) {
-      this.logger.error('Failed to find transaction with ID ' + id + ': ' + error.message);
-      throw new HttpException(
-        error.message || 'Failed to find transaction with ID ' + id,
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  public async update(id: string, updateTransactionDto: UpdateTransactionDto, userId: string): Promise<TransactionResponseDto> {
-    this.logger.log(' Updating transaction with ID ' + id + ' for user ' + userId);
-
-    try {
-      this.validateTransactionType(updateTransactionDto.type);
-      const transaction = await this.prisma.transaction.update({
-        where: { id, userId },
-        data: updateTransactionDto,
-      });
-      this.logger.log('Transaction updated successfully: ' + JSON.stringify(transaction));
-      return this.mapToTransactionResponse(transaction);
-    } catch (error) {
-      this.logger.error('Failed to update transaction with ID ' + id + ': ' + error.message);
-      throw new HttpException(
-        error.message || 'Failed to update transaction with ID ' + id,
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  public async delete(id: string, userId: string): Promise<void> {
-    this.logger.log('Deleting transaction with ID ' + id + ' for user ' + userId);
-    try {
-      const transaction = await this.prisma.transaction.delete({
-        where: { id, userId },
-      });
-      this.logger.log('Transaction deleted successfully: ' + JSON.stringify(transaction));
-    } catch (error) {
-      this.logger.error('Failed to delete transaction with ID ' + id + ': ' + error.message);
-      throw new HttpException(
-        error.message || 'Failed to delete transaction with ID ' + id,
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      )
-    }
-  }
-
-
-  public async getDailyBalanceWithTransactions(
+  async create(
+    createTransactionDto: CreateTransactionDto,
     userId: string,
-    startDate: Date,
-    endDate: Date,
-    interval: 'daily' | 'weekly',
-  ) {
-    // Validate input dates
-    const start = startOfDay(new Date(startDate));
-    const end = endOfDay(new Date(endDate));
-
-    if (start > end) {
-      throw new BadRequestException('Start date must be before end date');
-    }
-
-    // Fetch transactions within date range
-    const transactions = await this.prisma.transaction.findMany({
-      where: {
-        userId,
-        date: { gte: start, lte: end },
-      },
-      orderBy: { date: 'asc' },
-      include: { category: true, account: true },
-    });
-
-    // Get initial balance
-    const initialBalance = await this.getTotalBalanceOnDate(
-      userId,
-      subDays(start, 1)
+  ): Promise<TransactionDto> {
+    this.logger.log(
+      `Creating transaction for user ${userId} with data: ${JSON.stringify(
+        createTransactionDto,
+      )}`,
     );
 
-    const dateMap = this.initializeDateMap(start, end, interval, initialBalance);
+    try {
+      const { accountId, categoryId, amount, type, date: dateString, description } = createTransactionDto;
 
-    // Process transactions
-    let currentBalance = initialBalance;
-    for (const transaction of transactions) {
-      const periodKey = this.getPeriodKey(transaction.date, interval);
-      const periodData = dateMap.get(periodKey);
-
-      if (periodData) {
-        periodData.transactions.push(transaction);
-        currentBalance += this.getTransactionImpact(transaction);
-        periodData.balance = currentBalance;
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        throw new BadRequestException('Invalid date format');
       }
-    }
 
-    // Finalize balances
-    return this.finalizeBalances(dateMap, interval);
-  }
 
-  private getTransactionImpact(transaction: Transaction): number {
-    return transaction.type === 'CREDIT'
-      ? -transaction.amount
-      : transaction.amount;
-  }
+      if (date > new Date()) {
+        throw new BadRequestException('Transaction date cannot be in the future');
+      }
 
-  private initializeDateMap(
-    start: Date,
-    end: Date,
-    interval: 'daily' | 'weekly',
-    initialBalance: number
-  ): Map<string, { balance: number; transactions: Transaction[] }> {
-    const dateMap = new Map();
-
-    if (interval === 'daily') {
-      let currentDate = new Date(start);
-      while (currentDate <= end) {
-        const dateKey = this.getPeriodKey(currentDate, 'daily');
-        dateMap.set(dateKey, {
-          balance: initialBalance,
-          transactions: []
+      return await this.prisma.$transaction(async (prisma) => {
+        // Validate category
+        const category = await prisma.category.findUnique({
+          where: { id: categoryId },
         });
-        currentDate = addDays(currentDate, 1);
-      }
-    } else {
-      const firstWeekStart = startOfWeek(start);
-      const lastWeekStart = startOfWeek(end);
-      let currentWeek = firstWeekStart;
+        if (!category) {
+          throw new NotFoundException(`Category ${categoryId} not found`);
+        }
 
-      while (currentWeek <= lastWeekStart) {
-        const weekKey = this.getPeriodKey(currentWeek, 'weekly');
-        dateMap.set(weekKey, {
-          balance: initialBalance,
-          transactions: []
+        // Validate transaction type
+        this.validateTransactionType(type);
+
+        // Lock and validate account
+        const account = await prisma.account.findUnique({
+          where: { id: accountId, userId },
         });
-        currentWeek = addWeeks(currentWeek, 1);
-      }
+        if (!account) {
+          throw new NotFoundException(`Account ${accountId} not found`);
+        }
+
+        // Calculate new balance
+        const balanceChange = type === 'CREDIT' ? -amount : amount;
+        const newBalance = Number(account.balance) + balanceChange;
+
+        // Create transaction
+        const transaction = await this.prisma.transaction.create({
+          data: {
+            description,
+            amount,
+            type,
+            date,
+            user: { connect: { id: userId } },
+            category: { connect: { id: categoryId } },
+            account: { connect: { id: accountId } },
+          },
+        });
+
+
+        // Update account balance
+        await prisma.account.update({
+          where: { id: accountId },
+          data: { balance: newBalance },
+        });
+
+        this.logger.debug(
+          `Transaction created: ${JSON.stringify(transaction)}`,
+        );
+
+        return this.mapToTransactionResponse(transaction);
+      });
+    } catch (error) {
+      this.handleError(error, 'Failed to create transaction');
     }
-
-    return dateMap;
   }
 
-  private getPeriodKey(date: Date, interval: 'daily' | 'weekly'): string {
-    const targetDate = new Date(date);
-    return interval === 'daily'
-      ? targetDate.toISOString().split('T')[0]
-      : startOfWeek(targetDate).toISOString().split('T')[0];
-  }
+  async findAll(
+    userId: string,
+    query: TransactionQueryDto,
+  ): Promise<TransactionResponseDto> {
+    this.logger.log(`Fetching transactions for user ${userId}`);
 
-  private finalizeBalances(
-    dateMap: Map<string, { balance: number; transactions: Transaction[] }>,
-    interval: 'daily' | 'weekly'
-  ) {
-    const sortedKeys = Array.from(dateMap.keys()).sort();
-    const result: Array<{
-      date: string;
-      balance: number;
-      transactions: Transaction[];
-    }> = [];
+    try {
+      const where: Prisma.TransactionWhereInput = { userId };
+      const { search, type, page = 1, limit = 10, sortBy, order } = query;
 
-    let lastBalance = dateMap.get(sortedKeys[0])?.balance || 0;
-
-    for (const key of sortedKeys) {
-      const periodData = dateMap.get(key);
-      if (!periodData) continue;
-
-      // Carry forward balance for periods with no transactions
-      if (periodData.transactions.length === 0) {
-        periodData.balance = lastBalance;
+      if (search) {
+        where.description = { contains: search, mode: 'insensitive' };
       }
 
-      result.push({
-        date: key,
-        balance: periodData.balance,
-        transactions: periodData.transactions,
+      if (type) {
+        where.type = type;
+      }
+
+      const [transactions, total] = await Promise.all([
+        this.prisma.transaction.findMany({
+          where,
+          orderBy: sortBy ? { [sortBy]: order || 'desc' } : undefined,
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prisma.transaction.count({ where }),
+      ]);
+
+      this.logger.debug(`Found ${transactions.length} transactions`);
+
+      return mapToPaginationResponse(
+        transactions.map(this.mapToTransactionResponse),
+        total,
+        page,
+        limit,
+      );
+    } catch (error) {
+      this.handleError(error, 'Failed to fetch transactions');
+    }
+  }
+
+  async findOne(id: string, userId: string): Promise<TransactionDto> {
+    this.logger.log(`Fetching transaction ${id} for user ${userId}`);
+
+    try {
+      const transaction = await this.prisma.transaction.findUnique({
+        where: { id, userId },
+        include: {
+          account: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true } },
+        },
       });
 
-      lastBalance = periodData.balance;
+      if (!transaction) {
+        throw new NotFoundException(`Transaction ${id} not found`);
+      }
+
+      return this.mapToTransactionResponse(transaction);
+    } catch (error) {
+      this.handleError(error, `Failed to fetch transaction ${id}`);
+    }
+  }
+
+  async update(
+    id: string,
+    updateDto: UpdateTransactionDto,
+    userId: string,
+  ): Promise<TransactionDto> {
+    this.logger.log(`Updating transaction ${id} for user ${userId}`);
+
+    const { accountId: newAccountId, categoryId, amount: newAmount, type: newType, date: dateString, description } = updateDto;
+
+    const date = dateString ? new Date(dateString) : undefined;
+
+    if (dateString) {
+      if (isNaN(date.getTime())) {
+        throw new BadRequestException('Invalid date format');
+      }
+
+      if (date > new Date()) {
+        throw new BadRequestException('Transaction date cannot be in the future');
+      }
+
     }
 
-    return result;
+    try {
+      return await this.prisma.$transaction(async (prisma) => {
+        this.logger.debug(`Starting transaction for update ${id}`);
+
+        // Получаем существующую транзакцию с текущим аккаунтом
+        const existing = await prisma.transaction.findUnique({
+          where: { id, userId },
+          include: { account: true, category: true },
+        });
+
+        if (!existing) {
+          throw new NotFoundException(`Transaction ${id} not found`);
+        }
+
+        // Проверяем, изменились ли поля, влияющие на баланс
+        const isAccountChanged = newAccountId && newAccountId !== existing.accountId;
+
+        let oldAccount = existing.account;
+        let newAccount = oldAccount;
+
+        // Если изменился аккаунт, проверяем новый
+        if (isAccountChanged) {
+          this.logger.debug(`Account changed from ${oldAccount.id} to ${newAccountId}`);
+          newAccount = await prisma.account.findUnique({
+            where: { id: newAccountId, userId },
+          });
+          if (!newAccount) {
+            throw new NotFoundException(`Account ${newAccountId} not found`);
+          }
+        }
+
+        // Проверяем категорию, если изменилась
+        if (categoryId && categoryId !== existing.categoryId) {
+          const category = await prisma.category.findUnique({ where: { id: categoryId } });
+          if (!category) {
+            throw new NotFoundException(`Category ${categoryId} not found`);
+          }
+        }
+
+        // Валидируем тип, если изменился
+        if (newType) {
+          this.validateTransactionType(newType);
+        }
+
+        // Рассчитываем изменения баланса
+        const oldImpact = existing.type === 'CREDIT' ? -existing.amount : existing.amount;
+        const newTypeValue = newType || existing.type;
+        const newAmountValue = newAmount !== undefined ? newAmount : existing.amount;
+        const newImpact = newTypeValue === 'CREDIT' ? -newAmountValue : newAmountValue;
+
+        const impactDifference = newImpact - oldImpact;
+
+        // Обновляем балансы аккаунтов, если есть изменения
+        if (impactDifference !== 0 || isAccountChanged) {
+          // Если аккаунт изменился, корректируем старый и новый
+          if (isAccountChanged) {
+            // Возвращаем старый аккаунт к предыдущему балансу
+            await prisma.account.update({
+              where: { id: oldAccount.id },
+              data: { balance: oldAccount.balance - oldImpact },
+            });
+
+            // Применяем новый impact к новому аккаунту
+            await prisma.account.update({
+              where: { id: newAccount.id },
+              data: { balance: newAccount.balance + newImpact },
+            });
+
+            this.logger.debug(`Adjusted balances for old account ${oldAccount.id} and new account ${newAccount.id}`);
+          } else {
+            // Обновляем текущий аккаунт
+            await prisma.account.update({
+              where: { id: oldAccount.id },
+              data: { balance: oldAccount.balance + impactDifference },
+            });
+            this.logger.debug(`Adjusted balance for account ${oldAccount.id} by ${impactDifference}`);
+          }
+        }
+
+        // Обновляем саму транзакцию
+        const updatedTransaction = await prisma.transaction.update({
+          where: { id },
+          data: {
+            description,
+            amount: newAmountValue,
+            type: newTypeValue,
+            date,
+            categoryId: categoryId || existing.categoryId,
+            accountId: newAccountId || existing.accountId,
+          },
+        });
+
+        this.logger.debug(`Transaction ${id} updated successfully`);
+
+        return this.mapToTransactionResponse(updatedTransaction);
+      });
+    } catch (error) {
+      this.handleError(error, `Failed to update transaction ${id}`);
+    }
   }
 
-  private async getTotalBalanceOnDate(userId: string, date: Date) {
-    const [creditResult, debitResult] = await Promise.all([
-      this.prisma.transaction.aggregate({
-        where: {
-          userId,
-          date: { lt: date },
-          type: 'CREDIT',
-        },
-        _sum: { amount: true },
-      }),
-      this.prisma.transaction.aggregate({
-        where: {
-          userId,
-          date: { lt: date },
-          type: 'DEBIT',
-        },
-        _sum: { amount: true },
-      }),
-    ]);
+  async delete(id: string, userId: string): Promise<void> {
+    this.logger.log(`Deleting transaction ${id} for user ${userId}`);
 
-    return (debitResult._sum.amount || 0) - (creditResult._sum.amount || 0);
+    try {
+      await this.prisma.$transaction(async (prisma) => {
+        const transaction = await prisma.transaction.findUnique({
+          where: { id, userId },
+          include: { account: true },
+        });
+
+        if (!transaction) {
+          throw new NotFoundException(`Transaction ${id} not found`);
+        }
+
+        // Calculate balance impact (reverse original transaction effect)
+        const impact =
+          transaction.type === 'CREDIT'
+            ? transaction.amount // Revert CREDIT: add back to balance
+            : -transaction.amount; // Revert DEBIT: subtract from balance
+
+        // Restore account balance
+        await prisma.account.update({
+          where: { id: transaction.accountId },
+          data: { balance: transaction.account.balance + impact },
+        });
+
+        // Delete transaction
+        await prisma.transaction.delete({ where: { id } });
+
+        this.logger.debug(`Transaction ${id} deleted successfully`);
+      });
+    } catch (error) {
+      this.handleError(error, `Failed to delete transaction ${id}`);
+    }
   }
-
-
-  // async getExpensesByCategory(userId: string, start?: Date, end?: Date): Promise<Record<string, number>> {
-  //   const where: Prisma.TransactionWhereInput = {
-  //     userId,
-  //     // type: 'credit',
-  //   };
-
-  //   if (startDate) {
-  //     where.createdAt = { gte: startOfDay(startDate) };
-  //   }
-  //   if (endDate) {
-  //     where.createdAt = { lte: endOfDay(endDate) };
-  //   }
-
-  //   const transactions = await this.prisma.transaction.findMany({
-  //     where,
-  //     include: { category: true },
-  //   });
-
-  //   const expensesByCategory = transactions.reduce((acc, transaction) => {
-  //     const categoryName = transaction.category?.name || 'Uncategorized'; // Handle missing categories
-  //     acc[categoryName] = (acc[categoryName] || 0) + transaction.amount;
-  //     return acc;
-  //   }, {} as Record<string, number>);
-
-  //   return expensesByCategory;
-  // }
 }
