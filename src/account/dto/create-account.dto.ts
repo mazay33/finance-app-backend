@@ -1,52 +1,39 @@
-import { IsBoolean, IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsBoolean, IsDecimal, IsEnum, IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Currency } from '@common/enums';
+import Decimal from 'decimal.js';
+import { AccountType } from '@prisma/client';
 
 export class CreateAccountDto {
-
-  @ApiProperty({
-    description: 'The name of the account',
-    example: 'Savings Account',
-  })
+  @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  name: string
+  @MaxLength(60)
+  name!: string
 
-  @ApiProperty({
-    description: 'The balance of the account',
-    example: 1000.00,
-  })
-  @IsNumber()
+  @ApiProperty({ type: String })
+  @IsDecimal()
   @IsNotEmpty()
-  balance: number
+  balance!: Decimal
 
-  @ApiProperty({
-    description: 'The type of the account',
-    example: '2ef88f58-ecc4-415d-a03c-57418c7c711f',
-  })
-  @IsString()
+  @ApiProperty({ enum: AccountType })
+  @IsEnum(AccountType)
   @IsNotEmpty()
-  accountTypeId: string
+  type!: AccountType
 
-  @ApiProperty({
-    description: 'The description of the account',
-    example: 'Savings account for personal use',
-  })
+  @ApiProperty()
   @IsString()
-  description: string
+  @MaxLength(255)
+  description!: string
 
-  @ApiProperty({
-    description: 'The status of the account',
-    example: true,
-  })
+  @ApiProperty()
   @IsBoolean()
   @IsNotEmpty()
-  isActive: boolean
+  isActive!: boolean
 
-  @ApiProperty({
-    description: 'The currency of the account',
-    example: 'USD',
-  })
+  @ApiProperty({ enum: Currency })
   @IsString()
   @IsNotEmpty()
-  currency: string
+  @IsIn(Object.values(Currency))
+  currency!: Currency
 }
