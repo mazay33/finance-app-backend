@@ -18,11 +18,13 @@ enum Role {
 }
 
 enum TransactionType {
-  CREDIT
-  DEBIT
+  CREDIT // Расходы
+  DEBIT // Поступления
+  TRANSFER // Переводы между счетами
+  ADJUSTMENT // Корректировки
 }
 
-enum AccountTypeEnum {
+enum AccountType {
   CASH // Наличные
   DEBIT_CARD // Дебетовая карта
   CREDIT_CARD // Кредитная карта
@@ -30,6 +32,16 @@ enum AccountTypeEnum {
   INVESTMENT // Инвестиции
   RECEIVABLES // Дебиторская задолженность
   PAYABLES // Кредиторская задолженность
+}
+
+enum CategoryType {
+  EXPENSE // Расход
+  INCOME // Доход
+}
+
+enum AccountRole {
+  OWNER
+  MEMBER
 }
 
 model User {
@@ -42,11 +54,13 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  transactions Transaction[]
-  categories   Category[]
-  accounts     Account[]
-  budgets      Budget[]
-  goals        Goal[]
+  transactions    Transaction[]
+  categories      Category[]
+  accounts        Account[]
+  budgets         Budget[]
+  goals           Goal[]
+  AccountMember   AccountMember[]
+  AccountCategory AccountCategory[]
 
   @@map("users")
 }
@@ -65,7 +79,7 @@ model Token {
 
 model Transaction {
   id          String          @id @unique @default(uuid())
-  amount      Float
+  amount      Decimal
   type        TransactionType
   description String?
   date        DateTime
@@ -82,56 +96,82 @@ model Transaction {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([type])
+  @@index([accountId])
+  @@index([categoryId])
   @@map("transactions")
 }
 
 model Category {
-  id          String        @id @unique @default(uuid())
-  name        String        @unique
-  userId      String?
-  user        User?         @relation(fields: [userId], references: [id])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  Transaction Transaction[]
-  Budget      Budget[]
+  id           String            @id @unique @default(uuid())
+  name         String
+  type         CategoryType
+  icon         String
+  color        String? // например, персональные настройки цвета у категории
+  userId       String
+  user         User              @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+  budgets      Budget[]
+  accounts     AccountCategory[] // Связь через промежуточную таблицу
 
+  @@unique([userId, name, type], name: "category_user_name_type")
   @@map("categories")
+}
+
+model AccountCategory {
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  addedById String
+  addedBy   User   @relation(fields: [addedById], references: [id])
+
+  addedAt DateTime @default(now())
+
+  @@id([accountId, categoryId])
+  @@map("account_categories")
 }
 
 // Account
 model Account {
-  id          String  @id @unique @default(uuid())
-  name        String  @unique
-  balance     Float
+  id          String      @id @unique @default(uuid())
+  name        String
+  balance     Decimal
   description String
   isActive    Boolean
   currency    String
+  type        AccountType @default(CASH)
 
-  accountTypeId String
-  accountType   AccountType @relation(fields: [accountTypeId], references: [id])
+  members      AccountMember[]
+  transactions Transaction[]
+  categories   AccountCategory[] // Связь через промежуточную таблицу
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  transactions Transaction[]
+  User      User?    @relation(fields: [userId], references: [id])
+  userId    String?
 
   @@map("accounts")
 }
 
-model AccountType {
-  id       String          @id @unique @default(uuid())
-  name     AccountTypeEnum @unique
-  accounts Account[]
+model AccountMember {
+  id        String      @id @unique @default(uuid())
+  account   Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+  user      User        @relation(fields: [userId], references: [id])
+  userId    String
+  role      AccountRole // OWNER / MEMBER
+  joinedAt  DateTime    @default(now())
 
-  @@map("account_types")
+  @@unique([accountId, userId], name: "account_user_unique")
+  @@map("account_members")
 }
 
 model Budget {
   id         Int      @id @default(autoincrement())
-  amount     Float
+  amount     Decimal
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
   userId     String
@@ -143,12 +183,12 @@ model Budget {
 }
 
 model Goal {
-  id            Int    @id @default(autoincrement())
+  id            Int     @id @default(autoincrement())
   name          String
-  targetAmount  Float
-  currentAmount Float
+  targetAmount  Decimal
+  currentAmount Decimal
   userId        String
-  user          User   @relation(fields: [userId], references: [id])
+  user          User    @relation(fields: [userId], references: [id])
 
   @@map("goals")
 }
