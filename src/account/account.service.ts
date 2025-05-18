@@ -255,6 +255,21 @@ export class AccountService {
           throw new HttpException('You are not the owner of this account', HttpStatus.FORBIDDEN);
         }
 
+        // First delete all related transactions
+        await prisma.transaction.deleteMany({
+          where: { accountId: id }
+        });
+
+        // First delete all related account categories
+        await prisma.accountCategory.deleteMany({
+          where: { accountId: id }
+        });
+
+        // Then delete the account members
+        await prisma.accountMember.deleteMany({
+          where: { accountId: id }
+        });
+
         // Удаляем аккаунт (каскадное удаление для связанных записей)
         await prisma.account.delete({ where: { id } });
       });
