@@ -3,13 +3,14 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
+import { DecimalTransformerInterceptor } from './common/interceptors';
 
 async function start() {
   const PORT = process.env.PORT || 5000;
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: 'http://localhost:4000',
+    origin: ['http://localhost:3333', 'http://localhost:4000', 'http://localhost:4001'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
@@ -18,6 +19,7 @@ async function start() {
   app.useGlobalPipes(new ValidationPipe(
     { transform: true, }
   ));
+  app.useGlobalInterceptors(new DecimalTransformerInterceptor());
 
   const config = new DocumentBuilder()
     .setTitle('finance-app')

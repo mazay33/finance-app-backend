@@ -11,7 +11,8 @@ import { TransactionModule } from './transaction/transaction.module';
 import { AccountModule } from './account/account.module';
 import { CategoryModule } from './category/category.module';
 import { AdminModule } from './admin/admin.module';
-import { DashboardModule } from './dashboard/dashboard.module';
+// import { DashboardModule } from './dashboard/dashboard.module';
+import { AccountCategoryModule } from './account-category/account-category.module';
 
 @Module({
   imports: [
@@ -20,12 +21,13 @@ import { DashboardModule } from './dashboard/dashboard.module';
     PrismaModule,
     AuthModule,
     UserModule,
-    BudgetModule,
-    TransactionModule,
-    AccountModule,
-    CategoryModule,
     AdminModule,
-    DashboardModule,
+    AccountModule,
+    TransactionModule,
+    CategoryModule,
+    AccountCategoryModule,
+    BudgetModule,
+    // DashboardModule,
   ],
   controllers: [],
   providers: [
@@ -35,4 +37,4 @@ import { DashboardModule } from './dashboard/dashboard.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }
