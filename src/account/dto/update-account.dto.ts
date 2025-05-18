@@ -1,34 +1,36 @@
-import { IsBoolean, IsDecimal, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDecimal, IsEnum, IsOptional, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import Decimal from 'decimal.js';
 import { AccountType } from '@prisma/client';
+import { Currency } from '@common/enums';
 
 export class UpdateAccountDto {
-  @ApiProperty()
+  @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
   name?: string
 
-  @ApiProperty()
+  @ApiProperty({ required: false, type: String })
   @IsDecimal()
   @IsOptional()
   balance?: Decimal
 
-  @ApiProperty()
+  @ApiProperty({ required: false, enum: AccountType })
   @IsEnum(AccountType)
-  @IsNotEmpty()
-  type!: AccountType
+  @IsOptional()
+  type?: AccountType
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
   @IsString()
+  @IsOptional()
   description?: string
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
   @IsBoolean()
   @IsOptional()
   isActive?: boolean
 
-  @ApiProperty()
+  @ApiProperty({ required: false, enum: Currency })
   @IsString()
   @IsOptional()
   currency?: string

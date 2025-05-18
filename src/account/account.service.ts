@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, HttpStatus, Inject, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
@@ -8,18 +8,20 @@ import { AccountResponseDto } from './responses/account-response.dto';
 import { AccountQueryDto } from './dto/account-query.dto';
 import { mapToPaginationResponse } from '@common/utils';
 import { PaginatedAccountResponseDto } from './responses/paginated-account-response.dto';
-
+import { AccountCategoryService } from '../account-category/account-category.service';
+import { IAccountRepository, ACCOUNT_REPOSITORY } from './repositories';
 
 @Injectable()
 export class AccountService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) { }
-
   private readonly logger = new Logger(AccountService.name);
 
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(ACCOUNT_REPOSITORY) private readonly accountRepository: IAccountRepository
+  ) { }
+
   private mapToAccountResponse(account: Account): AccountResponseDto {
-    return new AccountResponseDto(account)
+    return new AccountResponseDto(account);
   }
 
   private handleError(error: Error, defaultMessage: string): never {
@@ -40,16 +42,9 @@ export class AccountService {
     accountId: string,
     userId: string,
   ): Promise<Account> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: accountId },
-      include: {
-        members: {
-          where: { userId },
-        },
-      },
-    });
+    const { account, member } = await this.accountRepository.findByIdWithMember(accountId, userId);
 
-    if (!account || account.members.length === 0) {
+    if (!account || !member) {
       throw new NotFoundException(`Account with id "${accountId}" not found or access denied`);
     }
 
@@ -57,16 +52,8 @@ export class AccountService {
   }
 
   private async isUserOwner(accountId: string, userId: string): Promise<boolean> {
-
-    const member = await this.prisma.accountMember.findFirst({
-      where: {
-        accountId,
-        userId,
-        role: AccountRole.OWNER,
-      },
-    });
-
-    return !!member;
+    const { member } = await this.accountRepository.findByIdWithMember(accountId, userId);
+    return member?.role === AccountRole.OWNER;
   }
 
   private async validateUniqueAccount(
@@ -75,50 +62,36 @@ export class AccountService {
     type: AccountType,
     userId: string,
   ): Promise<void> {
-    const existingAccount = await this.prisma.account.findFirst({
-      where: {
-        name,
-        currency,
-        type,
-        members: { some: { userId } },
-      },
-    });
+    const existingAccount = await this.accountRepository.findUniqueByUserAttributes(
+      name,
+      currency,
+      type,
+      userId
+    );
+
     if (existingAccount) {
       this.logger.debug(`Account with name ${name} already exists for user ${userId}`);
       throw new ConflictException(`Account with name ${name} already exists`);
     }
   }
 
-
   public async create(
     createAccountDto: CreateAccountDto,
     userId: string,
   ): Promise<AccountResponseDto> {
     try {
-      this.logger.log(`Creating account for user ${userId} with data: ${JSON.stringify(createAccountDto)}`);
-
+      this.logger.log(`Creating account for user ${userId}`);
       const { type, balance, currency, description, isActive, name } = createAccountDto;
 
       return await this.prisma.$transaction(async (tx) => {
-        await this.validateUniqueAccount(
-          createAccountDto.name,
-          createAccountDto.currency,
-          createAccountDto.type,
-          userId
-        );
+        await this.validateUniqueAccount(name, currency, type, userId);
 
-
+        // Создаем аккаунт
         const createdAccount = await tx.account.create({
-          data: {
-            balance,
-            currency,
-            description,
-            isActive,
-            name,
-            type,
-          },
+          data: { balance, currency, description, isActive, name, type }
         });
 
+        // Создаем владельца аккаунта
         await tx.accountMember.create({
           data: {
             accountId: createdAccount.id,
@@ -127,8 +100,8 @@ export class AccountService {
           },
         });
 
+        // Добавляем все существующие категории пользователя к аккаунту
         const categories = await tx.category.findMany({ where: { userId } });
-
         if (categories.length > 0) {
           await tx.accountCategory.createMany({
             data: categories.map((category) => ({
@@ -139,8 +112,7 @@ export class AccountService {
           });
         }
 
-        this.logger.log(`Account created successfully`);
-
+        this.logger.log(`Account created successfully with ID ${createdAccount.id}`);
         return this.mapToAccountResponse(createdAccount);
       });
     } catch (error) {
@@ -148,80 +120,62 @@ export class AccountService {
     }
   }
 
-
-
   public async findAll(userId: string, query: AccountQueryDto): Promise<PaginatedAccountResponseDto> {
-    this.logger.log(`Finding all accounts for user ${userId}`);
     try {
-      const where: Prisma.AccountWhereInput = {};
+      this.logger.log(`Finding accounts for user ${userId} with filters`);
       const { currency, order, page = 1, limit = 10, search, sortBy, type } = query;
 
+      // Подготавливаем фильтры
+      const filters: Prisma.AccountWhereInput = {};
+
       if (search) {
-        where.description = { contains: search, mode: 'insensitive' };
+        filters.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } }
+        ];
       }
 
       if (type) {
-        where.type = type;
+        filters.type = type;
       }
 
       if (currency) {
-        where.currency = currency;
+        filters.currency = currency;
       }
 
-      const [accounts, total] = await Promise.all([
-        this.prisma.account.findMany({
-          where: {
-            members: {
-              some: {
-                userId,
-              },
-            },
-            ...where,
-          },
-          orderBy: sortBy ? [{ [sortBy]: order || 'desc' }] : undefined,
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        this.prisma.account.count({
-          where: {
-            members: {
-              some: {
-                userId,
-              },
-            },
-            ...where,
-          },
-        }),
-      ]);
+      // Подготавливаем сортировку
+      const orderBy: Prisma.AccountOrderByWithRelationInput[] = sortBy
+        ? [{ [sortBy]: order || 'desc' as Prisma.SortOrder }]
+        : [{ createdAt: 'desc' as Prisma.SortOrder }];
+
+      // Получаем данные с пагинацией
+      const [accounts, total] = await this.accountRepository.findByUserIdWithFilters(
+        userId,
+        filters,
+        { skip: (page - 1) * limit, take: limit },
+        orderBy
+      );
 
       this.logger.debug(`Found ${accounts.length} accounts for user ${userId}`);
 
       return mapToPaginationResponse(
-        accounts.map((account) => new AccountResponseDto(account)),
+        accounts.map(account => this.mapToAccountResponse(account)),
         total,
         page,
-        limit,
+        limit
       );
     } catch (error) {
-      this.logger.error(`Failed to find all accounts: ${error.message}`);
-      throw new HttpException(
-        error.message || 'Failed to find all accounts',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      this.logger.error(`Failed to find accounts: ${error.message}`);
+      this.handleError(error, 'Failed to fetch accounts');
     }
   }
 
-
   public async findOne(id: string, userId: string): Promise<AccountResponseDto> {
-    this.logger.log(`Finding account with id ${id}`);
     try {
-      await this.getAccountWithAccessCheck(id, userId);
-      const account = await this.prisma.account.findUniqueOrThrow({
-        where: { id },
-      });
+      this.logger.log(`Finding account with id ${id}`);
+      const account = await this.getAccountWithAccessCheck(id, userId);
       return this.mapToAccountResponse(account);
     } catch (error) {
-      this.logger.error(`Failed to find account with id ${id}: ${error.message}`);
       this.handleError(error, `Failed to find account with id ${id}`);
     }
   }
@@ -231,19 +185,15 @@ export class AccountService {
     updateAccountDto: UpdateAccountDto,
     userId: string,
   ): Promise<AccountResponseDto> {
-    this.logger.log(`Updating account with id ${id}`);
     try {
-      return await this.prisma.$transaction(async (prisma) => {
-        await this.getAccountWithAccessCheck(id, userId);
+      this.logger.log(`Updating account with id ${id}`);
 
+      return await this.prisma.$transaction(async (prisma) => {
+        // Проверяем доступ к аккаунту
+        const account = await this.getAccountWithAccessCheck(id, userId);
         const { type, name, currency, ...updateData } = updateAccountDto;
 
-        const account = await prisma.account.findUnique({ where: { id } });
-
-        if (!account) {
-          throw new NotFoundException(`Account with id ${id} not found`);
-        }
-
+        // Проверяем, изменились ли уникальные поля
         const newType = type || account.type;
         const newName = name || account.name;
         const newCurrency = currency || account.currency;
@@ -253,28 +203,23 @@ export class AccountService {
           newCurrency !== account.currency ||
           newType !== account.type;
 
+        // Проверяем уникальность новой комбинации, если она изменилась
         if (isUniqueCombinationChanged) {
-          const conflictingAccount = await prisma.account.findFirst({
-            where: {
-              name: newName,
-              currency: newCurrency,
-              type: newType,
-              members: {
-                some: {
-                  userId,
-                },
-              },
-            },
-          });
+          const conflictingAccount = await this.accountRepository.findUniqueByUserAttributes(
+            newName,
+            newCurrency,
+            newType,
+            userId
+          );
 
           if (conflictingAccount && conflictingAccount.id !== id) {
             throw new ConflictException(
-              `Account with this combination of name (${newName}), ` +
-              `currency (${newCurrency}) and account type already exists`,
+              `Account with this combination of name, currency and account type already exists`
             );
           }
         }
 
+        // Обновляем аккаунт
         const updatePayload: Prisma.AccountUpdateInput = {
           ...updateData,
           ...(name && { name }),
@@ -296,28 +241,27 @@ export class AccountService {
   }
 
   public async delete(id: string, userId: string): Promise<void> {
-    this.logger.log(`Deleting account with id ${id}`);
     try {
+      this.logger.log(`Deleting account with id ${id}`);
+
       await this.prisma.$transaction(async (prisma) => {
+        // Проверяем доступ к аккаунту
         await this.getAccountWithAccessCheck(id, userId);
 
+        // Проверяем, что пользователь является владельцем
         const isOwner = await this.isUserOwner(id, userId);
-        console.log(isOwner);
 
         if (!isOwner) {
           throw new HttpException('You are not the owner of this account', HttpStatus.FORBIDDEN);
         }
 
-        await prisma.account.delete({
-          where: { id },
-        });
+        // Удаляем аккаунт (каскадное удаление для связанных записей)
+        await prisma.account.delete({ where: { id } });
       });
 
-      this.logger.log(`Account deleted successfully`);
+      this.logger.log(`Account ${id} deleted successfully`);
     } catch (error) {
-      this.logger.error(`Failed to delete account: ${error.message}`);
       this.handleError(error, `Failed to delete account with id ${id}`);
     }
   }
-
 }

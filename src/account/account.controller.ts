@@ -9,6 +9,8 @@ import {
   UseInterceptors,
   ClassSerializerInterceptor,
   Query,
+  HttpStatus,
+  HttpCode,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,14 +29,17 @@ import { AccountService } from './account.service';
 @ApiTags('Account')
 @ApiBearerAuth()
 @Controller('account')
+@UseInterceptors(ClassSerializerInterceptor)
 export class AccountController {
   constructor(private readonly accountService: AccountService) { }
 
   @ApiOperation({ summary: 'Создание счёта' })
   @ApiBody({ type: CreateAccountDto })
-  @ApiResponse({ type: AccountResponseDto })
-  @UseInterceptors(ClassSerializerInterceptor)
+  @ApiResponse({ status: HttpStatus.CREATED, type: AccountResponseDto, description: 'Счёт успешно создан' })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Некорректные данные' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'Счёт с таким именем уже существует' })
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   async create(
     @CurrentUser() user: JwtPayload,
     @Body() createAccountDto: CreateAccountDto,
@@ -43,16 +48,19 @@ export class AccountController {
   }
 
   @ApiOperation({ summary: 'Получить список счетов' })
-  @ApiResponse({ type: PaginatedAccountResponseDto })
-  @UseInterceptors(ClassSerializerInterceptor)
+  @ApiResponse({ status: HttpStatus.OK, type: PaginatedAccountResponseDto, description: 'Список счетов' })
   @Get('/list')
-  async findAll(@CurrentUser() user: JwtPayload, @Query() query: AccountQueryDto): Promise<PaginatedAccountResponseDto> {
+  async findAll(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: AccountQueryDto
+  ): Promise<PaginatedAccountResponseDto> {
     return await this.accountService.findAll(user.id, query);
   }
 
   @ApiOperation({ summary: 'Получить счет по ID' })
-  @ApiParam({ name: 'id' })
-  @ApiResponse({ type: AccountResponseDto })
+  @ApiParam({ name: 'id', description: 'Идентификатор счета' })
+  @ApiResponse({ status: HttpStatus.OK, type: AccountResponseDto, description: 'Данные счета' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Счёт не найден или нет доступа' })
   @Get(':id')
   async findOne(
     @Param('id') id: string,
@@ -62,9 +70,11 @@ export class AccountController {
   }
 
   @ApiOperation({ summary: 'Обновить счет' })
-  @ApiParam({ name: 'id' })
+  @ApiParam({ name: 'id', description: 'Идентификатор счета' })
   @ApiBody({ type: UpdateAccountDto })
-  @ApiResponse({ type: AccountResponseDto })
+  @ApiResponse({ status: HttpStatus.OK, type: AccountResponseDto, description: 'Счёт обновлен' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Счёт не найден или нет доступа' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'Счёт с такой комбинацией данных уже существует' })
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -75,8 +85,12 @@ export class AccountController {
   }
 
   @ApiOperation({ summary: 'Удалить счет' })
-  @ApiParam({ name: 'id' })
+  @ApiParam({ name: 'id', description: 'Идентификатор счета' })
+  @ApiResponse({ status: HttpStatus.NO_CONTENT, description: 'Счёт удален' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Счёт не найден или нет доступа' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Недостаточно прав для удаления' })
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   async delete(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,

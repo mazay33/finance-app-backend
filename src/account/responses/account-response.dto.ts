@@ -3,42 +3,47 @@ import { Account, AccountType } from "@prisma/client";
 import { Exclude, Transform } from "class-transformer";
 import Decimal from "decimal.js";
 
-
-
-export class AccountResponseDto implements Account {
-  @ApiProperty()
+export class AccountResponseDto implements Partial<Account> {
+  @ApiProperty({ description: 'Уникальный ID счета' })
   id: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Название счета' })
   name: string;
 
-  @ApiProperty()
+  @ApiProperty({
+    description: 'Баланс счета',
+    type: String,
+    example: "1000.50"
+  })
   @Transform(({ value }) => value.toString())
   balance: Decimal;
 
-  @ApiProperty()
+  @ApiProperty({
+    description: 'Тип счета',
+    enum: AccountType,
+    enumName: 'AccountType'
+  })
   type: AccountType;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Описание счета' })
   description: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Активен ли счет', example: true })
   isActive: boolean;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Код валюты счета', example: "USD" })
   currency: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Дата создания счета' })
   createdAt: Date;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Дата последнего обновления счета' })
   updatedAt: Date;
 
   @Exclude()
-  @ApiProperty()
   userId: string;
 
-  constructor(account: Account) {
+  constructor(account: Partial<Account>) {
     Object.assign(this, account);
   }
 }
