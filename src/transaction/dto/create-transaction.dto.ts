@@ -1,26 +1,30 @@
-import { IsISO8601, IsNotEmpty, IsNumber, IsString, IsUUID, Min } from 'class-validator';
+import { IsDecimal, IsISO8601, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { $Enums } from '@prisma/client';
+import { TransactionType } from '@prisma/client';
+import Decimal from 'decimal.js';
+import { Transform } from 'class-transformer';
 
 export class CreateTransactionDto {
   @ApiProperty({
     description: 'The amount of the transaction',
-    example: 100.5,
-    type: Number,
+    example: "100.5",
+    type: Decimal,
   })
-  @IsNumber()
+  @Transform(({ value }) => {
+    if (value instanceof Decimal) return value;
+    return new Decimal(value);
+  })
   @IsNotEmpty()
-  @Min(1)
-  amount: number;
+  amount: Decimal | string;
 
   @ApiProperty({
     description: 'The type of the transaction (e.g., credit, debit)',
     example: 'credit',
-    enum: $Enums.TransactionType,
+    enum: TransactionType,
   })
   @IsString()
   @IsNotEmpty()
-  type: $Enums.TransactionType;
+  type: TransactionType;
 
   @ApiProperty({
     description: 'A brief description of the transaction',
@@ -54,4 +58,12 @@ export class CreateTransactionDto {
   @IsISO8601({ strict: true })
   @IsNotEmpty()
   date: string;
+
+  @IsOptional()
+  @IsUUID()
+  fromAccountId?: string; // For TRANSFER type only
+
+  @IsOptional()
+  @IsUUID()
+  toAccountId?: string; // For TRANSFER type only
 }

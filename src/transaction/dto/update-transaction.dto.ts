@@ -1,16 +1,22 @@
-import { IsISO8601, IsOptional, IsNumber, IsString } from 'class-validator';
+import { IsISO8601, IsOptional, IsNumber, IsString, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { TransactionType } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
+import { Transform } from 'class-transformer';
 
 export class UpdateTransactionDto {
   @ApiProperty({
     description: 'The amount of the transaction',
     example: 100.5,
-    type: Number,
+    type: Decimal,
   })
-  @IsNumber()
+  @Transform(({ value }) => {
+    if (!value) return undefined;
+    if (value instanceof Decimal) return value;
+    return new Decimal(value);
+  })
   @IsOptional()
-  amount?: number;
+  amount?: Decimal | string;
 
   @ApiProperty({
     description: 'The type of the transaction (e.g., credit, debit)',
@@ -35,7 +41,7 @@ export class UpdateTransactionDto {
     example: 'uuid',
     type: String,
   })
-  @IsString()
+  @IsUUID()
   @IsOptional()
   categoryId?: string;
 
@@ -44,7 +50,7 @@ export class UpdateTransactionDto {
     example: 'uuid',
     type: String,
   })
-  @IsString()
+  @IsUUID()
   @IsOptional()
   accountId?: string;
 
