@@ -7,10 +7,9 @@ import {
   BadRequestException
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccountCategoryResponseDto } from './responses/account-category-response.dto';
-import { CategoryResponseDto } from './responses/category-response.dto';
+import { AccountCategoryResponseDto, CategoryResponseDto } from './responses';
 import { AccountRole } from '@prisma/client';
-import { IAccountCategoryService } from './interfaces/account-category.interface';
+import { IAccountCategoryService } from './interfaces';
 
 @Injectable()
 export class AccountCategoryService implements IAccountCategoryService {

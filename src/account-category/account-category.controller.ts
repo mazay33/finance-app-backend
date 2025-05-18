@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccountCategoryService } from './account-category.service';
-import { AddCategoryDto } from './dto/add-category.dto';
+import { AddCategoryDto } from './dto';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -27,8 +27,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '@common/decorators';
 import { JwtPayload } from 'src/auth/interfaces';
-import { AccountCategoryResponseDto } from './responses/account-category-response.dto';
-import { CategoryResponseDto } from './responses/category-response.dto';
+import { AccountCategoryResponseDto, CategoryResponseDto } from './responses';
 
 @ApiTags('Account Categories')
 @Controller('account-categories')
